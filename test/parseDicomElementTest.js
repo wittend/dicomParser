@@ -5,7 +5,7 @@
     test("returns element", function() {
         // Arrange
         var byteArray = new Uint8Array(32);
-        var byteStream = new dicomParser.LittleEndianByteStream(byteArray);
+        var byteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
 
         // Act
         var element = dicomParser.readDicomElementExplicit(byteStream);
@@ -21,7 +21,7 @@
         byteArray[1] = 0x22;
         byteArray[2] = 0x33;
         byteArray[3] = 0x44;
-        var byteStream = new dicomParser.LittleEndianByteStream(byteArray);
+        var byteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
 
         // Act
         var element = dicomParser.readDicomElementExplicit(byteStream);
@@ -39,7 +39,7 @@
         byteArray[3] = 0x44;
         byteArray[4] = 0x53; // ST
         byteArray[5] = 0x54;
-        var byteStream = new dicomParser.LittleEndianByteStream(byteArray);
+        var byteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
 
         // Act
         var element = dicomParser.readDicomElementExplicit(byteStream);
@@ -59,7 +59,7 @@
         byteArray[5] = 0x54;
         byteArray[6] = 0x01; // length of 513
         byteArray[7] = 0x02;
-        var byteStream = new dicomParser.LittleEndianByteStream(byteArray);
+        var byteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
 
         // Act
         var element = dicomParser.readDicomElementExplicit(byteStream);
@@ -83,7 +83,7 @@
         byteArray[9] = 0x03; // 768
         byteArray[10] = 0x02; // 131072
         byteArray[11] = 0x01; // 16777216
-        var byteStream = new dicomParser.LittleEndianByteStream(byteArray);
+        var byteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
 
         // Act
         var element = dicomParser.readDicomElementExplicit(byteStream);
@@ -107,13 +107,75 @@
         byteArray[9] = 0x03; // 768
         byteArray[10] = 0x02; // 131072
         byteArray[11] = 0x01; // 16777216
-        var byteStream = new dicomParser.LittleEndianByteStream(byteArray);
+        var byteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
 
         // Act
         var element = dicomParser.readDicomElementExplicit(byteStream);
 
         // Assert
         equal(element.dataOffset, 12,  "dataOffset is not correct");
+    });
+
+    module("dicomParser.readDicomElementImplicit");
+
+    test("returns element", function() {
+        // Arrange
+        var byteArray = new Uint8Array(8);
+        byteArray[0] = 0x06;
+        byteArray[1] = 0x30;
+        byteArray[2] = 0xA6;
+        byteArray[3] = 0x00;
+        byteArray[4] = 0x00;
+        byteArray[5] = 0x00;
+        byteArray[6] = 0x00;
+        byteArray[7] = 0x00;
+        var byteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
+
+        // Act
+        var element = dicomParser.readDicomElementImplicit(byteStream);
+
+        // Assert
+        ok(element, "no element returned");
+    });
+
+    test("truncated element defined length returns", function() {
+        // Arrange
+        var byteArray = new Uint8Array(8);
+        byteArray[0] = 0x06;
+        byteArray[1] = 0x30;
+        byteArray[2] = 0xA6;
+        byteArray[3] = 0x00;
+        byteArray[4] = 0x00;
+        byteArray[5] = 0xFF;
+        byteArray[6] = 0xFF;
+        byteArray[7] = 0xFF;
+        var byteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
+
+        // Act
+        var element = dicomParser.readDicomElementImplicit(byteStream);
+
+        // Assert
+        ok(element, "no element returned");
+    });
+
+    test("truncated element undefined length returns", function() {
+        // Arrange
+        var byteArray = new Uint8Array(8);
+        byteArray[0] = 0x06;
+        byteArray[1] = 0x30;
+        byteArray[2] = 0xA6;
+        byteArray[3] = 0x00;
+        byteArray[4] = 0xFF;
+        byteArray[5] = 0xFF;
+        byteArray[6] = 0xFF;
+        byteArray[7] = 0xFF;
+        var byteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
+
+        // Act
+        var element = dicomParser.readDicomElementImplicit(byteStream);
+
+        // Assert
+        ok(element, "no element returned");
     });
 
 })(dicomParser);

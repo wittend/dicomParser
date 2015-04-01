@@ -38,10 +38,11 @@
     test("parse returns DataSet", function() {
         // Arrange
         var byteArray = makeTestData();
-        var byteStream = new dicomParser.LittleEndianByteStream(byteArray);
+        var byteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
 
         // Act
-        var dataSet = dicomParser.parseDicomDataSetExplicit(byteStream);
+        var dataSet = new dicomParser.DataSet(byteStream.byteArrayParser, byteArray, {});
+        dicomParser.parseDicomDataSetExplicit(dataSet, byteStream);
 
         // Assert
         ok(dataSet, "dataSet created");
@@ -50,10 +51,11 @@
     test("DataSet has two elements", function() {
         // Arrange
         var byteArray = makeTestData();
-        var byteStream = new dicomParser.LittleEndianByteStream(byteArray);
+        var byteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
 
         // Act
-        var dataSet = dicomParser.parseDicomDataSetExplicit(byteStream);
+        var dataSet = new dicomParser.DataSet(byteStream.byteArrayParser, byteArray, {});
+        dicomParser.parseDicomDataSetExplicit(dataSet, byteStream);
 
         // Assert
         ok(dataSet.elements.x22104433, "DataSet does not contain element with tag x22104433");

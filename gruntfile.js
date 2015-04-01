@@ -17,11 +17,19 @@ module.exports = function(grunt) {
                 dest: 'examples',
                 expand: true,
                 flatten: true
+            },
+            meteor : {
+                src: [
+                    'meteor/package.js',
+                ],
+                dest: 'dist',
+                expand: true,
+                flatten: true
             }
         },
         concat: {
             build: {
-                src : ['src/parseDicom.js', 'src/*.js'],
+                src : ['src/parseDicom.js', 'src/*.js', 'src/util/*.js'],
                 dest: 'build/built.js'
             },
             dist: {
@@ -65,7 +73,7 @@ module.exports = function(grunt) {
         },
         watch: {
             scripts: {
-                files: ['src/*.js', 'test/*.js'],
+                files: ['src/*.js', 'test/*.js', 'src/util/*.js'],
                 tasks: ['concat:build', 'concat:dist', 'jshint', 'qunit']
             }
         }
@@ -73,16 +81,21 @@ module.exports = function(grunt) {
 
     require('load-grunt-tasks')(grunt);
 
-    grunt.registerTask('buildAll', ['clean','concat:build', 'concat:dist', 'uglify', 'jshint', 'qunit']);
+    grunt.registerTask('buildAll', ['clean','concat:build', 'concat:dist', 'uglify', 'copy:meteor', 'jshint', 'qunit']);
     grunt.registerTask('default', ['buildAll']);
 };
 
 // Release process:
-//  1) Update version numbers
+//  1) Update version numbers in bower.json, package.json and meteor/package.js
 //  2) do a build (needed to update dist versions with correct build number)
+//      grunt
 //  3) commit changes
 //      git commit -am "Changes...."
 //  4) tag the commit
 //      git tag -a 0.1.0 -m "Version 0.1.0"
 //  5) push to github
 //      git push origin master --tags
+//  6) Update atmosphere
+//      meteor publish
+//  7) Update npm
+//      npm publish

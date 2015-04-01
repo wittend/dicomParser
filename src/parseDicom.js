@@ -9,6 +9,8 @@
  */
 
 (function (root, factory) {
+
+    // node.js
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = factory();
     }
@@ -19,30 +21,40 @@
         // Browser globals
         if(dicomParser === undefined) {
             dicomParser = {};
+
+            // meteor
+            if (typeof Package !== 'undefined') {
+                root.dicomParser = dicomParser;
+            }
         }
         dicomParser = factory();
     }
 }(this, function () {
 
     /**
-     * Parses a DICOM P10 byte array and returns a DataSet object with the parsed elements
+     * Parses a DICOM P10 byte array and returns a DataSet object with the parsed elements.  If the options
+     * argument is supplied and it contains the untilTag property, parsing will stop once that
+     * tag is encoutered.  This can be used to parse partial byte streams.
+     *
      * @param byteArray the byte array
+     * @param options object to control parsing behavior (optional)
      * @returns {DataSet}
-     * @throws error if unable to parse the file
+     * @throws error if an error occurs while parsing.  The exception object will contain a property dataSet with the
+     *         elements successfully parsed before the error.
      */
-     function parseDicom(byteArray) {
+     function parseDicom(byteArray, options) {
 
         if(byteArray === undefined)
         {
             throw "dicomParser.parseDicom: missing required parameter 'byteArray'";
         }
 
-        var byteStream = new dicomParser.LittleEndianByteStream(byteArray);
+        var littleEndianByteStream = new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray);
 
         function readPrefix()
         {
-            byteStream.seek(128);
-            var prefix = byteStream.readFixedString(4);
+            littleEndianByteStream.seek(128);
+            var prefix = littleEndianByteStream.readFixedString(4);
             if(prefix !== "DICM")
             {
                 throw "dicomParser.parseDicom: DICM prefix not found at location 132";
@@ -51,35 +63,57 @@
 
         function readPart10Header()
         {
+            // Per the DICOM standard, the header is always encoded in Explicit VR Little Endian (see PS3.10, section 7.1)
+            // so use littleEndianByteStream throughout this method regardless of the transfer syntax
             readPrefix();
 
-            // Read the group length element so we know how many bytes needed
-            // to read the entire meta header
-            var groupLengthElement = dicomParser.readDicomElementExplicit(byteStream);
-            var metaHeaderLength = dicomParser.readUint32(byteStream.byteArray, groupLengthElement.dataOffset);
-            var positionAfterMetaHeader = byteStream.position + metaHeaderLength;
-
-            var metaHeaderDataSet = dicomParser.parseDicomDataSetExplicit(byteStream, positionAfterMetaHeader);
-            metaHeaderDataSet[groupLengthElement.tag] = groupLengthElement;
+            var warnings = [];
+            var elements = {};
+            while(littleEndianByteStream.position < littleEndianByteStream.byteArray.length) {
+                var position = littleEndianByteStream.position;
+                var element = dicomParser.readDicomElementExplicit(littleEndianByteStream, warnings);
+                if(element.tag > 'x0002ffff') {
+                    littleEndianByteStream.position = position;
+                    break;
+                }
+                // Cache the littleEndianByteArrayParser for meta header elements, since the rest of the data set may be big endian
+                // and this parser will be needed later if the meta header values are to be read.
+                element.parser = dicomParser.littleEndianByteArrayParser;
+                elements[element.tag] = element;
+            }
+            var metaHeaderDataSet = new dicomParser.DataSet(littleEndianByteStream.byteArrayParser, littleEndianByteStream.byteArray, elements);
+            metaHeaderDataSet.warnings = littleEndianByteStream.warnings;
             return metaHeaderDataSet;
         }
 
-        function isExplicit(metaHeaderDataSet) {
+        function readTransferSyntax(metaHeaderDataSet) {
             if(metaHeaderDataSet.elements.x00020010 === undefined) {
                 throw 'dicomParser.parseDicom: missing required meta header attribute 0002,0010';
             }
             var transferSyntaxElement = metaHeaderDataSet.elements.x00020010;
-            var transferSyntax = dicomParser.readFixedString(byteStream.byteArray, transferSyntaxElement.dataOffset, transferSyntaxElement.length);
+            return dicomParser.readFixedString(littleEndianByteStream.byteArray, transferSyntaxElement.dataOffset, transferSyntaxElement.length);
+        }
+
+        function isExplicit(transferSyntax) {
             if(transferSyntax === '1.2.840.10008.1.2') // implicit little endian
             {
                 return false;
             }
-            else if(transferSyntax === '1.2.840.10008.1.2.2')
-            {
-                throw 'dicomParser.parseDicom: explicit big endian transfer syntax not supported';
-            }
             // all other transfer syntaxes should be explicit
             return true;
+        }
+
+        function getDataSetByteStream(transferSyntax) {
+            if(transferSyntax === '1.2.840.10008.1.2.2') // explicit big endian
+            {
+                return new dicomParser.ByteStream(dicomParser.bigEndianByteArrayParser, byteArray, littleEndianByteStream.position);
+            }
+            else
+            {
+                // all other transfer syntaxes are little endian; only the pixel encoding differs
+                // make a new stream so the metaheader warnings don't come along for the ride
+                return new dicomParser.ByteStream(dicomParser.littleEndianByteArrayParser, byteArray, littleEndianByteStream.position);
+            }
         }
 
         function mergeDataSets(metaHeaderDataSet, instanceDataSet)
@@ -91,20 +125,39 @@
                     instanceDataSet.elements[propertyName] = metaHeaderDataSet.elements[propertyName];
                 }
             }
+            if (metaHeaderDataSet.warnings !== undefined) {
+                instanceDataSet.warnings = metaHeaderDataSet.warnings.concat(instanceDataSet.warnings);
+            }
             return instanceDataSet;
         }
 
         function readDataSet(metaHeaderDataSet)
         {
-            var explicit = isExplicit(metaHeaderDataSet);
+            var transferSyntax = readTransferSyntax(metaHeaderDataSet);
+            var explicit = isExplicit(transferSyntax);
+            var dataSetByteStream = getDataSetByteStream(transferSyntax);
 
-            if(explicit) {
-                return dicomParser.parseDicomDataSetExplicit(byteStream);
+            var elements = {};
+            var dataSet = new dicomParser.DataSet(dataSetByteStream.byteArrayParser, dataSetByteStream.byteArray, elements);
+            dataSet.warnings = dataSetByteStream.warnings;
+
+            try{
+                if(explicit) {
+                    dicomParser.parseDicomDataSetExplicit(dataSet, dataSetByteStream, dataSetByteStream.byteArray.length, options);
+                }
+                else
+                {
+                    dicomParser.parseDicomDataSetImplicit(dataSet, dataSetByteStream, dataSetByteStream.byteArray.length, options);
+                }
             }
-            else
-            {
-                return dicomParser.parseDicomDataSetImplicit(byteStream);
+            catch(e) {
+                var ex = {
+                    exception: e,
+                    dataSet: dataSet
+                };
+                throw ex;
             }
+            return dataSet;
         }
 
         // main function here
@@ -112,8 +165,6 @@
             var metaHeaderDataSet = readPart10Header();
 
             var dataSet = readDataSet(metaHeaderDataSet);
-
-            dataSet.warnings = byteStream.warnings;
 
             return mergeDataSets(metaHeaderDataSet, dataSet);
         }

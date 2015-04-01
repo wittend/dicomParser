@@ -1,8 +1,8 @@
 dicomParser
 ===========
 
-dicomParser is a lightweight library for parsing DICOM P10 byte streams in modern web browsers (IE10+) ande Node.js.
-dicomParser is fast, easy to use and has no external dependencies.  .
+dicomParser is a lightweight library for parsing DICOM P10 byte streams in modern web browsers (IE10+),  Node.js
+and Meteor.  dicomParser is fast, easy to use and has no external dependencies.
 
 Live Examples
 ---------------
@@ -19,9 +19,17 @@ Get a packaged source file:
 * [dicomParser.js](https://raw.githubusercontent.com/chafey/dicomParser/master/dist/dicomParser.js)
 * [dicomParser.min.js](https://raw.githubusercontent.com/chafey/dicomParser/master/dist/dicomParser.min.js)
 
+Or install via [NPM](https://www.npmjs.com/):
+
+> npm install dicom-parser
+
 Or install via [Bower](http://bower.io/):
 
 > bower install dicomParser
+
+Or install via atmosphere for [Meteor](https://www.meteor.com/) applications
+
+> meteor add chafey:dicom-parser
 
 Usage
 -------
@@ -39,9 +47,9 @@ try
 
     // access elements by tag
     var sopInstanceUid = dataSet.string('x0020000d');
-    // access pixel data (assumes uncompressed 8 bit pixels grayscale)
-    var pixelData = new UInt8Array(dataSet.elements.x7fe00010.buffer, dataSet.elements.x7fe00010.dataOffset);
-
+    // access 16 bit unsigned pixel data for single frame sop instance
+    // NOTE: use Uint8Array for for 8 bit gray data and Int16Array for 16 bit signed data
+    var pixelData = new Uint16Array(dataSet.byteArray.buffer, dataSet.elements.x7fe00010.dataOffset);
 }
 catch(err)
 {
@@ -64,7 +72,9 @@ You can find the actual code that extracts grayscale pixel data using this libra
 Key Features
 ------------
 
-* Parses DICOM Part 10 byte arrays in both implicit little endian and explicit little endian transfer syntaxes
+* Parses DICOM Part 10 byte arrays in all encodings
+  * Explicit and implicit
+  * Little endian and big endian
 * Supports all VR's including sequences
 * Supports elements with undefined length
 * Supports sequence items with undefined length
@@ -75,6 +85,12 @@ Key Features
 * Packaged using the module pattern, as an AMD module and as a CommonJS module for Node.js
 * No external dependencies
 * Supports extraction of encapsulated pixel data frames
+* Convenient utility functions to parse strings formatted in DA, TM and PN VRs and return JavaScript objects
+* Convenient utility function to create a string version of an explicit element
+* Convenient utility function to convert a parsed explicit dataSet into a javascript object
+* Supports reading incomplete/partial byte streams
+  * By specifying a tag to stop reading at
+  * By returning the elements parsed so far in the exception thrown during a parse error
 
 Build System
 ============
@@ -117,18 +133,23 @@ Future:
 * Figure out how to automatically generate documentation from the source (jsdoc)
 * Optimize findItemDelimitationItemAndSetElementLength() for speed
 * Optimize functions in byteArrayParser.js for speed
-* Add characteristics feature that will report on which aspects of the encoding this byte stream uses
-  (e.g. items with undefined length, sequences, sequences with undefined lengths, sequences with items
-  with undefined lengths, encapsulated pixel data with multiple fragments, etc)
 * Add example that allows you to compare two sop instances against each other
 * Figure out how to not have a global dicomParser object when used with an AMD loader
 * See what needs to be done to support different character sets (assumes ASCII currently)
+* Support for parsing from streams on Node.js and Meteor
+* Switch to JavaScript ES6
+* Separate the parsing logic from the dataSet creation logic (e.g. parsing generates events
+  which dataSet creation logic creates the dataSet from)
+  * dataSet creation logic could filter out unwanted tags to improve performance of parse
+  * dataSet creation logic could defer creation of sequence dataSets to improve performance of parse
 
 Contributors
 ============================================
 
 * @neandrake for help with getting Node.js support
 * @ggerade for implementing support for floats/doubles with VM > 1
+* @bryan-cool for bug fix related to parsing implicit little endian files and big endian support
+* @snagytx, @doncharkowsky - for bug fix related to reading encapsulated frames
 
 Why another Javascript DICOM parsing library?
 ============================================
@@ -167,7 +188,7 @@ help it reach the widest adoption.
 
 _Designed to work well in a browser (modern ones at least)_
 
-There are some good javascript DICOM parsing libraries available for server development on node.js but they
+There are some [good javascript DICOM parsing libraries](https://github.com/grmble/node-dicom) available for server development on node.js but they
 won't automatically work in a browser.  I needed a library that let me easily parse WADO responses and
 I figured others would also prefer a simple library to do this with no dependencies.
 The library does make use of the [ArrayBuffer](https://developer.mozilla.org/en-US/docs/Web/API/ArrayBuffer)
